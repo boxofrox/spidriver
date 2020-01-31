@@ -9,6 +9,10 @@
 #define HANDLE int
 #endif
 
+typedef enum {
+  LSBit, MSBit,
+} BitOrder;
+
 typedef struct {
   int connected;          // Set to 1 when connected
   HANDLE port;
@@ -22,6 +26,7 @@ typedef struct {
   unsigned int
             ccitt_crc,    // Hardware CCITT CRC
             e_ccitt_crc;  // Host CCITT CRC, should match
+  BitOrder  bit_order;
 } SPIDriver;
 
 void spi_connect(SPIDriver *sd, const char* portname);

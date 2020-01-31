@@ -347,6 +347,18 @@ void spi_writeread(SPIDriver *sd, char bytes[], size_t nn)
   }
 }
 
+static
+int set_bit_order(BitOrder order, int byte) {
+  int out = byte;
+  if (LSBit == order) {
+    out = ((0xf0 & out) >> 4) | ((0x0f & out) << 4);
+    out = ((0xcc & out) >> 2) | ((0x33 & out) << 2);
+    out = ((0xaa & out) >> 1) | ((0x55 & out) << 1);
+  }
+
+  return out;
+}
+
 int spi_commands(SPIDriver *sd, int argc, char *argv[])
 {
   int i;
@@ -354,8 +366,6 @@ int spi_commands(SPIDriver *sd, int argc, char *argv[])
   for (i = 0; i < argc; i++) {
     char *token = argv[i];
     // printf("token [%s]\n", token);
-    if (strlen(token) != 1)
-      goto badcommand;
     switch (token[0]) {
 
     case 'i':
@@ -378,7 +388,7 @@ int spi_commands(SPIDriver *sd, int argc, char *argv[])
         char bytes[8192], *endptr = token;
         size_t nn = 0;
         while (nn < sizeof(bytes)) {
-          bytes[nn++] = strtol(endptr, &endptr, 0);
+          bytes[nn++] = set_bit_order(sd->bit_order, strtol(endptr, &endptr, 0));
           if (*endptr == '\0')
             break;
           if (*endptr != ',') {
@@ -399,7 +409,7 @@ int spi_commands(SPIDriver *sd, int argc, char *argv[])
         spi_read(sd, bytes, nn);
         size_t i;
         for (i = 0; i < nn; i++)
-          printf("%s0x%02x", i ? "," : "", 0xff & bytes[i]);
+          printf("%s0x%02x", i ? "," : "", 0xff & set_bit_order(sd->bit_order, bytes[i]));
         printf("\n");
       }
       break;
@@ -417,21 +427,31 @@ int spi_commands(SPIDriver *sd, int argc, char *argv[])
       break;
 
     default:
-    badcommand:
-      fprintf(stderr, "Bad command '%s'\n", token);
-      fprintf(stderr, "\n");
-      fprintf(stderr, "Commands are:");
-      fprintf(stderr, "\n");
-      fprintf(stderr, "  i     display status information (uptime, voltage, current, temperature)\n");
-      fprintf(stderr, "  s     SPI select\n");
-      fprintf(stderr, "  u     SPI unselect\n");
-      fprintf(stderr, "  w     write bytes to SPI\n");
-      fprintf(stderr, "  r N   read N bytes from SPI\n");
-      fprintf(stderr, "  a 0/1 Set A line\n");
-      fprintf(stderr, "  b 0/1 Set B line\n");
-      fprintf(stderr, "\n");
+      if (0 == strcmp("lsb", token)) {
+          sd->bit_order = LSBit;
+      } else if (0 == strcmp("msb", token)) {
+          sd->bit_order = MSBit;
+      } else {
+        // Bad command.
 
-      return 1;
+        fprintf(stderr, "Bad command '%s'\n", token);
+        fprintf(stderr, "\n");
+        fprintf(stderr, "Commands are:");
+        fprintf(stderr, "\n");
+        fprintf(stderr, "  i     display status information (uptime, voltage, current, temperature)\n");
+        fprintf(stderr, "  s     SPI select\n");
+        fprintf(stderr, "  u     SPI unselect\n");
+        fprintf(stderr, "  w     write bytes to SPI\n");
+        fprintf(stderr, "  r N   read N bytes from SPI\n");
+        fprintf(stderr, "  a 0/1 Set A line\n");
+        fprintf(stderr, "  b 0/1 Set B line\n");
+        fprintf(stderr, "  lsb   Change byte transfer mode to least significant bit first\n");
+        fprintf(stderr, "  msb   Change byte transfer mode to most significant bit first (default)\n");
+        fprintf(stderr, "\n");
+
+        return 1;
+      }
+      break;
     }
   }
 
